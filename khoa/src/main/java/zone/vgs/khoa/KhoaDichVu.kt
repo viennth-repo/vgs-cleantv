@@ -196,6 +196,7 @@ class KhoaDichVu : AccessibilityService() {
         val am = getSystemService(AudioManager::class.java) ?: return
         runCatching {
             if (bat) {
+                focus?.let { am.abandonAudioFocusRequest(it) }; focus = null
                 val r = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                     .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build()).build()
                 am.requestAudioFocus(r); focus = r
