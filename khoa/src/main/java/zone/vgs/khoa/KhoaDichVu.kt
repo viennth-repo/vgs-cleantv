@@ -10,6 +10,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -27,6 +28,7 @@ import java.util.Locale
  * Dịch vụ khoá (23/10/2026): trong khung giờ phụ huynh đặt, phủ một lớp kín màn hình (lớp trợ năng nằm trên mọi
  * app, kể cả HDMI) và nuốt mọi phím remote — chỉ còn số / mũi tên / OK để nhập PIN. Đúng PIN thì mở tạm
  * moTamPhut (mặc định 60). Sai 5 lần thì chờ 60 giây. Đang khoá thì dừng tiếng (giành audio focus + tắt tiếng nhạc).
+ * Mode trẻ em: YouTube ở trước đủ phút thì phủ bài cộng trừ. Lớp khoá giờ vẫn ưu tiên và nuốt mọi phím.
  */
 class KhoaDichVu : AccessibilityService() {
     companion object {
@@ -48,6 +50,16 @@ class KhoaDichVu : AccessibilityService() {
     private var chon = 4
     private var pin = ""
     private var focus: AudioFocusRequest? = null
+    private var mat: String? = null
+    private var bai: LuatTre.Bai? = null
+    private var lopBai: View? = null
+    private var moc = SystemClock.elapsedRealtime()
+    private var chonBai = 0
+    private var mucBai = 10
+    private var hangDap: LinearLayout? = null
+    private var tvPhep: TextView? = null
+    private val nhanDap = mutableListOf<TextView>()
+    private var dapHien = listOf<Int>()
     private val vi get() = Locale.getDefault().language == "vi"
     private fun t(v: String, e: String) = if (vi) v else e
 
@@ -65,16 +77,35 @@ class KhoaDichVu : AccessibilityService() {
     override fun onDestroy() {
         tay.removeCallbacksAndMessages(null)
         anKhoa()
+        if (lopBai != null) {
+            dongBai(phat = false)
+            imTieng(false)
+        }
         dangChay = null
         super.onDestroy()
     }
 
-    override fun onAccessibilityEvent(e: AccessibilityEvent?) {}
+    override fun onAccessibilityEvent(e: AccessibilityEvent?) {
+        if (e?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = e.packageName?.toString() ?: return
+        if (pkg == packageName) return
+        tay.post { doiMat(pkg) }
+    }
     override fun onInterrupt() {}
+
+    private fun laYoutube(pkg: String?) = pkg in LuatTre.YOUTUBE
+
+    private fun doiMat(pkg: String) {
+        if (pkg == mat) return
+        ghiNhip()
+        mat = pkg
+        moc = SystemClock.elapsedRealtime()
+    }
 
     fun capNhatSau() = tay.post { capNhat() }
 
     private fun capNhat() {
+        ghiNhip()
         val c = kho.cauHinh
         val bay = Calendar.getInstance()
         val khoa = c != null && Luat.trongGio(c, bay) && System.currentTimeMillis() >= kho.moTamDen
@@ -136,6 +167,7 @@ class KhoaDichVu : AccessibilityService() {
         lop?.let { v -> runCatching { getSystemService(WindowManager::class.java).removeView(v) } }
         if (lop != null) imTieng(false)
         lop = null; dangKhoa = false
+        if (lopBai != null) imTieng(true)
     }
 
     private fun imTieng(bat: Boolean) {
@@ -167,12 +199,147 @@ class KhoaDichVu : AccessibilityService() {
         if (con > 0) tvBao.text = t("Sai nhiều lần. Thử lại sau ${(con + 999) / 1000} giây.", "Too many tries. Try again in ${(con + 999) / 1000} s.")
     }
 
+    // ---------- Bài toán ----------
+
+    private fun ghiNhip() {
+        if (!::kho.isInitialized) return
+        val nay = SystemClock.elapsedRealtime()
+        val them = ((nay - moc) / 1000).coerceIn(0L, 20L)
+        moc = nay
+        val c = kho.cheDo()
+        if (!LuatTre.locDuoc(c)) {
+            if (lopBai != null) dongBai(phat = true)
+            return
+        }
+        var d = LuatTre.cong(kho.dongHo, laYoutube(mat), them)
+        if (d.dangChoBai && laYoutube(mat) && lopBai == null && lop == null) hienBai(c.mucToan)
+        else if (LuatTre.denLuc(d, c.phutToan) && laYoutube(mat) && lop == null) {
+            d = LuatTre.moBai(d)
+            kho.dongHo = d
+            dungPhat()
+            hienBai(c.mucToan)
+            return
+        }
+        kho.dongHo = d
+    }
+
+    private fun guiMedia(ma: Int) {
+        val am = getSystemService(AudioManager::class.java) ?: return
+        val t = SystemClock.uptimeMillis()
+        runCatching {
+            am.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, ma, 0))
+            am.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, ma, 0))
+        }
+    }
+
+    private fun dungPhat() = guiMedia(KeyEvent.KEYCODE_MEDIA_PAUSE)
+
+    private fun phatLai() {
+        guiMedia(KeyEvent.KEYCODE_MEDIA_PLAY)
+        imTieng(false)
+        if (lop != null) imTieng(true)
+    }
+
+    private fun hienBai(muc: Int) {
+        if (lopBai != null || lop != null) return
+        mucBai = muc
+        chonBai = 0
+        val moi = LuatTre.sinh(muc, System.nanoTime(), bai)
+        bai = moi
+        val cot = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
+        val phep = chu("${moi.a} ${moi.op} ${moi.b}", 48f, dam = true).apply { setPadding(0, dp(8), 0, dp(18)) }
+        tvPhep = phep
+        cot.addView(phep)
+        val hang = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+        hangDap = hang
+        ganDap(hang, moi)
+        cot.addView(hang)
+        val nen = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor("#FF0A0718"))
+            addView(cot, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        }
+        val lp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_FULLSCREEN,
+            PixelFormat.TRANSLUCENT)
+        runCatching { getSystemService(WindowManager::class.java).addView(nen, lp) }.onSuccess {
+            lopBai = nen
+            imTieng(true)
+        }
+    }
+
+    private fun ganDap(hang: LinearLayout, b: LuatTre.Bai) {
+        hang.removeAllViews()
+        nhanDap.clear()
+        val ds = b.dapAn(System.nanoTime())
+        dapHien = ds
+        ds.forEach { so ->
+            val o = chu(so.toString(), 32f, dam = true).apply {
+                layoutParams = LinearLayout.LayoutParams(dp(132), dp(68)).apply { setMargins(dp(8), 0, dp(8), 0) }
+            }
+            nhanDap += o
+            hang.addView(o)
+        }
+        veChonBai()
+    }
+
+    private fun veChonBai() = nhanDap.forEachIndexed { i, o ->
+        o.background = GradientDrawable().apply {
+            cornerRadius = dp(16).toFloat()
+            setColor(if (i == chonBai) Color.parseColor("#8B5CF6") else Color.parseColor("#221B45"))
+        }
+    }
+
+    private fun dongBai(phat: Boolean) {
+        lopBai?.let { v -> runCatching { getSystemService(WindowManager::class.java).removeView(v) } }
+        lopBai = null
+        hangDap = null
+        tvPhep = null
+        nhanDap.clear()
+        dapHien = emptyList()
+        if (phat) {
+            kho.dongHo = LuatTre.dungBai(kho.dongHo)
+            phatLai()
+        }
+    }
+
+    private fun saiBai() {
+        val hang = hangDap ?: return
+        val moi = LuatTre.sinh(mucBai, System.nanoTime(), bai)
+        bai = moi
+        chonBai = 0
+        tvPhep?.text = "${moi.a} ${moi.op} ${moi.b}"
+        ganDap(hang, moi)
+    }
+
     // ---------- Phím remote ----------
 
     override fun onKeyEvent(e: KeyEvent): Boolean {
-        if (lop == null) return false
-        if (e.action == KeyEvent.ACTION_DOWN) tay.post { xuLy(e.keyCode) }
-        return true // đang khoá: nuốt mọi phím, kể cả Home, Back, nút app, giọng nói
+        if (lop != null) {
+            if (e.action == KeyEvent.ACTION_DOWN) tay.post { xuLy(e.keyCode) }
+            return true // đang khoá: nuốt mọi phím, kể cả âm lượng, Home, Back
+        }
+        if (lopBai == null) return false
+        if (e.keyCode == KeyEvent.KEYCODE_VOLUME_UP || e.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
+            e.keyCode == KeyEvent.KEYCODE_VOLUME_MUTE || e.keyCode == KeyEvent.KEYCODE_POWER) return false
+        if (e.action == KeyEvent.ACTION_DOWN) tay.post { phimBai(e.keyCode) }
+        return true
+    }
+
+    private fun phimBai(k: Int) {
+        if (lop != null || lopBai == null) return
+        when (k) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> if (chonBai > 0) { chonBai--; veChonBai() }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> if (chonBai < 2) { chonBai++; veChonBai() }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> chonDap()
+        }
+    }
+
+    private fun chonDap() {
+        val dung = bai?.dung ?: return
+        val chon = dapHien.getOrNull(chonBai) ?: return
+        if (chon == dung) dongBai(true) else saiBai()
     }
 
     private fun xuLy(k: Int) {
