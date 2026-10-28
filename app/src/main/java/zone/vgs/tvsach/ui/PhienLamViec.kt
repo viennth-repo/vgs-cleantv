@@ -850,7 +850,7 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
         khoaKhung.forEach { if (!gio.matches(it.tu) || !gio.matches(it.den) || it.ngay.isEmpty()) error(t("Khung giờ ${it.tu}–${it.den} chưa đúng (giờ dạng 21:00, chọn ít nhất một ngày).", "Period ${it.tu}–${it.den} is not valid.")) }
         val j = jsonDatKhoa()
         val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
-        io { tv.caiKhoa(apk, j.toString()) { thongBao = it } }
+        io { tv.caiKhoa(ctx, apk, j.toString()) { thongBao = it } }
         kotlinx.coroutines.delay(2500)
         khoaTrenTv = io { tv.docKhoa() }
         khoaPin = ""; khoaPin2 = ""
@@ -864,12 +864,12 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
     fun luuTre() = chay(t("Đang lưu mode trẻ em…", "Saving kids mode…")) {
         kiemPinKhoa()
         val coPin = khoaTrenTv?.optBoolean("coPin") == true
+        val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
         if (!coPin || khoaPin.isNotEmpty()) {
             val gio = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
             khoaKhung.forEach { if (!gio.matches(it.tu) || !gio.matches(it.den) || it.ngay.isEmpty()) error(t("Khung giờ ${it.tu}–${it.den} chưa đúng (giờ dạng 21:00, chọn ít nhất một ngày).", "Period ${it.tu}–${it.den} is not valid.")) }
             val j = jsonDatKhoa()
-            val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
-            io { tv.caiKhoa(apk, j.toString()) { thongBao = it } }
+            io { tv.caiKhoa(ctx, apk, j.toString()) { thongBao = it } }
         }
         val app = treApp.toMutableList()
         val coIcon = trangThai?.let { tt -> tt.coBieuTuong.intersect(tt.caiDat) } ?: emptySet()
@@ -879,6 +879,7 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
             .put("phutToan", trePhut)
             .put("mucToan", treMuc)
             .put("appChoPhep", JSONArray(app))
+        io { tv.damBaoBanKhoa(ctx, apk) { thongBao = it } }
         io { tv.datTre(tre.toString()) }
         kotlinx.coroutines.delay(2500)
         val doc = io { tv.docKhoa() }
@@ -893,6 +894,8 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
 
     /** Đổi mode phụ huynh / trẻ em. Không hỏi PIN trên điện thoại. */
     fun chuyenModeTre(lenh: String) = chay(t("Đang gửi lệnh…", "Sending…")) {
+        val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
+        io { tv.damBaoBanKhoa(ctx, apk) { thongBao = it } }
         io { tv.datTre(JSONObject().put("lenh", lenh).toString()) }
         kotlinx.coroutines.delay(800)
         val j = io { tv.docKhoa() }

@@ -1,5 +1,7 @@
 package zone.vgs.tvsach.adb
 
+import android.content.Context
+import android.os.Build
 import zone.vgs.tvsach.t
 import zone.vgs.tvsach.dulieu.BanSaoLuu
 import zone.vgs.tvsach.dulieu.catJsonKhoa
@@ -1190,20 +1192,61 @@ class ThaoTacTv(private val adb: KetNoiAdb, private val kho: KhoSaoLuu) {
         if (!kq.contains("ok=1")) error(t("Tivi không nhận mode trẻ em: ${kq.trim()}", "The TV rejected kids mode: ${kq.trim()}"))
     }
 
-    /** Cài (nếu cần), cấp quyền tự canh gác, ghi cấu hình, bật dịch vụ khoá. [json] không chứa dấu nháy đơn. */
-    fun caiKhoa(apk: ByteArray, json: String, bao: (String) -> Unit) {
+    /** Cài hoặc cài đè khi tivi chưa có app hoặc `versionCode` thấp hơn asset, rồi cấp quyền, ghi cấu hình, bật dịch vụ. [json] không chứa dấu nháy đơn. */
+    fun caiKhoa(ctx: Context, apk: ByteArray, json: String, bao: (String) -> Unit) {
         require(!json.contains('\'')) { "json" }
-        if (!khoaDaCai()) {
+        if (canCaiKhoa(ctx, apk)) {
             bao(t("Cài app Khoá trẻ em lên tivi…", "Installing the Kids lock app on the TV…"))
-            adb.ghiFile("/data/local/tmp/khoa.apk", apk)
-            val out = sh("pm install -r /data/local/tmp/khoa.apk; rm -f /data/local/tmp/khoa.apk")
-            if (!out.contains("Success")) error(t("Cài không được: ${out.trim().lines().lastOrNull()}", "Install failed: ${out.trim().lines().lastOrNull()}"))
+            caiFileKhoa(apk)
         }
-        sh("pm grant $PKG_KHOA android.permission.WRITE_SECURE_SETTINGS 2>/dev/null; cmd appops set $PKG_KHOA AUTO_START allow 2>/dev/null; true")
+        capQuyenKhoa()
         bao(t("Ghi giờ khoá và mã PIN…", "Saving the schedule and PIN…"))
         val kq = sh("content call --uri $khoaUri --method dat --arg '$json'")
         if (!kq.contains("ok=1")) error(t("Tivi không nhận cấu hình: ${kq.trim()}", "The TV rejected the settings: ${kq.trim()}"))
         bao(t("Bật dịch vụ khoá…", "Turning the lock service on…"))
+        batDichVuKhoa()
+    }
+
+    /** Trước `dat-tre`: cài lại nếu bản trên tivi cũ hơn asset, rồi bật quyền và dịch vụ như [caiKhoa]. */
+    fun damBaoBanKhoa(ctx: Context, apk: ByteArray, bao: (String) -> Unit = {}) {
+        if (!canCaiKhoa(ctx, apk)) return
+        bao(t("Cài app Khoá trẻ em lên tivi…", "Installing the Kids lock app on the TV…"))
+        caiFileKhoa(apk)
+        capQuyenKhoa()
+        batDichVuKhoa()
+    }
+
+    /** `versionCode` trong `dumpsys package`; null khi chưa cài hoặc không có mã. */
+    private fun versionCodeTrenTv(): Int? =
+        Regex("""versionCode=(\d+)""").find(sh("dumpsys package $PKG_KHOA 2>/dev/null"))?.groupValues?.get(1)?.toIntOrNull()
+
+    /** `versionCode` của APK asset, đọc bằng PackageManager sau khi ghi ra file cache. null nếu không đọc được. */
+    private fun versionCodeAsset(ctx: Context, apk: ByteArray): Int? {
+        val f = java.io.File(ctx.cacheDir, "khoa-asset.apk")
+        f.writeBytes(apk)
+        val info = ctx.packageManager.getPackageArchiveInfo(f.absolutePath, 0) ?: return null
+        val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode.toInt() else @Suppress("DEPRECATION") info.versionCode
+        return code.takeIf { it > 0 }
+    }
+
+    /** Chưa cài, hoặc asset đọc được và cao hơn bản trên tivi. */
+    private fun canCaiKhoa(ctx: Context, apk: ByteArray): Boolean {
+        val tv = versionCodeTrenTv() ?: return true
+        val asset = versionCodeAsset(ctx, apk) ?: return false
+        return tv < asset
+    }
+
+    private fun caiFileKhoa(apk: ByteArray) {
+        adb.ghiFile("/data/local/tmp/khoa.apk", apk)
+        val out = sh("pm install -r /data/local/tmp/khoa.apk; rm -f /data/local/tmp/khoa.apk")
+        if (!out.contains("Success")) error(t("Cài không được: ${out.trim().lines().lastOrNull()}", "Install failed: ${out.trim().lines().lastOrNull()}"))
+    }
+
+    private fun capQuyenKhoa() {
+        sh("pm grant $PKG_KHOA android.permission.WRITE_SECURE_SETTINGS 2>/dev/null; cmd appops set $PKG_KHOA AUTO_START allow 2>/dev/null; true")
+    }
+
+    private fun batDichVuKhoa() {
         sh("s=\$(settings get secure enabled_accessibility_services); case \"\$s\" in *$khoaDv*) ;; null|'') settings put secure enabled_accessibility_services $khoaDv ;; *) settings put secure enabled_accessibility_services \"\$s:$khoaDv\" ;; esac; settings put secure accessibility_enabled 1")
     }
 
