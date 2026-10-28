@@ -6,6 +6,11 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
+    <queries>
+        <package android:name="com.google.android.youtube.tv" />
+        <package android:name="com.google.android.youtube" />
+    </queries>
+
     <application android:label="@string/ten_app" android:allowBackup="false" android:supportsRtl="true">
         <service
             android:name=".KhoaDichVu"
