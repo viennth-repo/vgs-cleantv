@@ -2,4 +2,24 @@
 <resources>
     <string name="ten_app">Khoá trẻ em (CleanTV)</string>
     <string name="mo_ta">Khoá tivi theo khung giờ phụ huynh đặt trong app CleanTV; mở bằng mã PIN.</string>
+    <string name="ph_dat_pin">Đặt mã PIN 4 số</string>
+    <string name="ph_nhap_lai">Nhập lại mã PIN</string>
+    <string name="ph_khong_khop">Hai lần nhập PIN không giống nhau.</string>
+    <string name="ph_nhap_cua">Nhập mã PIN để vào cài đặt.</string>
+    <string name="ph_sai_pin">Sai mã PIN, còn %1$d lần.</string>
+    <string name="ph_chan">Sai nhiều lần. Thử lại sau %1$d giây.</string>
+    <string name="ph_tieu_de">Cài đặt trẻ em</string>
+    <string name="ph_bat">Bật</string>
+    <string name="ph_tat">Tắt</string>
+    <string name="ph_ve_tre">Về mode trẻ em</string>
+    <string name="ph_muc">Mức toán</string>
+    <string name="ph_phut">%1$d phút</string>
+    <string name="ph_app">Ứng dụng cho phép</string>
+    <string name="ph_yt">YouTube luôn được chọn.</string>
+    <string name="ph_luu">Lưu</string>
+    <string name="ph_da_luu">Đã lưu.</string>
+    <string name="ph_chua_pin">Chưa có PIN.</string>
+    <string name="ph_tat_trang">Đang tắt.</string>
+    <string name="ph_phu_trang">Đang bật, mode phụ huynh.</string>
+    <string name="ph_tre_trang">Đang bật, mode trẻ em.</string>
 </resources>

@@ -9,6 +9,14 @@
     <queries>
         <package android:name="com.google.android.youtube.tv" />
         <package android:name="com.google.android.youtube" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application android:label="@string/ten_app" android:allowBackup="false" android:supportsRtl="true">
@@ -27,6 +35,12 @@
             android:name=".CauHinhProvider"
             android:authorities="zone.vgs.cleantv.khoa"
             android:exported="true" />
+        <activity android:name=".ManPhuHuynh" android:exported="true" android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="zone.vgs.khoa.PHU_HUYNH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <receiver android:name=".KhoiDong" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
