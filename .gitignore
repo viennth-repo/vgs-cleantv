@@ -1,5 +1,6 @@
 .gradle/
 build/
+.contexts/
 app/build/
 local.properties
 upstream/
