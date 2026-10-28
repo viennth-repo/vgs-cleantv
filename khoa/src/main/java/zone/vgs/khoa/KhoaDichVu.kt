@@ -17,6 +17,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.LinearLayout
@@ -70,6 +71,8 @@ class KhoaDichVu : AccessibilityService() {
     override fun onServiceConnected() {
         kho = Kho(this)
         dangChay = this
+        val pkg = goiDangTruoc()
+        if (laYoutube(pkg)) mat = pkg
         CanhGac.hen(this)
         tay.post(nhip)
     }
@@ -94,6 +97,25 @@ class KhoaDichVu : AccessibilityService() {
     override fun onInterrupt() {}
 
     private fun laYoutube(pkg: String?) = pkg in LuatTre.YOUTUBE
+
+    private fun goiDangTruoc(): String? = runCatching {
+        val tuGoc = rootInActiveWindow?.let { goc ->
+            try { goc.packageName?.toString() } finally { runCatching { goc.recycle() } }
+        }
+        if (!tuGoc.isNullOrEmpty()) return@runCatching tuGoc
+        val ds = windows ?: return@runCatching null
+        try {
+            for (w in ds) {
+                if (w.type != AccessibilityWindowInfo.TYPE_APPLICATION) continue
+                val goc = w.root ?: continue
+                val pkg = try { goc.packageName?.toString() } finally { runCatching { goc.recycle() } }
+                if (!pkg.isNullOrEmpty()) return@runCatching pkg
+            }
+            null
+        } finally {
+            ds.forEach { runCatching { it.recycle() } }
+        }
+    }.getOrNull()
 
     private fun doiMat(pkg: String) {
         if (pkg == mat) return
