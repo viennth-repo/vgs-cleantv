@@ -30,8 +30,10 @@ class CanhGac : JobService() {
         }
 
         fun damBao(ctx: Context) {
-            val c = Kho(ctx).cauHinh ?: return
-            if (!c.bat) return
+            val kho = Kho(ctx)
+            val c = kho.cauHinh
+            val tre = LuatTre.doc(kho.json)
+            if (c?.bat != true && !tre.treBat) return
             val ten = ComponentName(ctx, KhoaDichVu::class.java).flattenToString()
             runCatching {
                 val cr = ctx.contentResolver
