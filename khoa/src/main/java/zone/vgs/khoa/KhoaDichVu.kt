@@ -258,8 +258,8 @@ class KhoaDichVu : AccessibilityService() {
     private fun dungPhat() = guiMedia(KeyEvent.KEYCODE_MEDIA_PAUSE)
 
     private fun phatLai() {
-        guiMedia(KeyEvent.KEYCODE_MEDIA_PLAY)
         imTieng(false)
+        guiMedia(KeyEvent.KEYCODE_MEDIA_PLAY)
         if (lop != null) imTieng(true)
     }
 

@@ -835,6 +835,22 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
         return j
     }
 
+    /** PIN mới kèm lịch khoá đang có trên tivi. Không có khung thì khoá tắt, không ghi mặc định form. */
+    private fun jsonPinGiuLich(): JSONObject {
+        val doc = khoaTrenTv
+        val ks = doc?.optJSONArray("khung")?.takeIf { it.length() > 0 }
+        val j = JSONObject()
+            .put("bat", if (ks != null) doc?.optBoolean("bat") == true else false)
+            .put("khung", if (ks != null) JSONArray(ks.toString()) else JSONArray())
+            .put("moTamPhut", doc?.optInt("moTamPhut", KHOA_MO_TAM) ?: KHOA_MO_TAM)
+        if (khoaPin.isNotEmpty()) {
+            val muoi = java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+            val bam = java.security.MessageDigest.getInstance("SHA-256").digest((muoi + khoaPin).toByteArray()).joinToString("") { "%02x".format(it) }
+            j.put("muoi", muoi).put("pinBam", bam)
+        }
+        return j
+    }
+
     private fun kiemPinKhoa() {
         val coPin = khoaTrenTv?.optBoolean("coPin") == true
         if (!coPin || khoaPin.isNotEmpty()) {
@@ -866,19 +882,19 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
         val coPin = khoaTrenTv?.optBoolean("coPin") == true
         val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
         if (!coPin || khoaPin.isNotEmpty()) {
-            val gio = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
-            khoaKhung.forEach { if (!gio.matches(it.tu) || !gio.matches(it.den) || it.ngay.isEmpty()) error(t("Khung giờ ${it.tu}–${it.den} chưa đúng (giờ dạng 21:00, chọn ít nhất một ngày).", "Period ${it.tu}–${it.den} is not valid.")) }
-            val j = jsonDatKhoa()
+            val j = jsonPinGiuLich()
             io { tv.caiKhoa(ctx, apk, j.toString()) { thongBao = it } }
         }
         val app = treApp.toMutableList()
         val coIcon = trangThai?.let { tt -> tt.coBieuTuong.intersect(tt.caiDat) } ?: emptySet()
         for (p in youtubeTre) if (p in coIcon && p !in app) app += p
+        val daBat = khoaTrenTv?.optBoolean("treBat") == true
         val tre = JSONObject()
-            .put("lenh", if (treBat) "bat" else "tat")
             .put("phutToan", trePhut)
             .put("mucToan", treMuc)
             .put("appChoPhep", JSONArray(app))
+        if (!daBat && treBat) tre.put("lenh", "bat")
+        else if (daBat && !treBat) tre.put("lenh", "tat")
         io { tv.damBaoBanKhoa(ctx, apk) { thongBao = it } }
         io { tv.datTre(tre.toString()) }
         kotlinx.coroutines.delay(2500)
