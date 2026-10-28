@@ -345,7 +345,7 @@ class KhoaDichVu : AccessibilityService() {
         if (lopBai == null) return false
         if (e.keyCode == KeyEvent.KEYCODE_VOLUME_UP || e.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN ||
             e.keyCode == KeyEvent.KEYCODE_VOLUME_MUTE || e.keyCode == KeyEvent.KEYCODE_POWER) return false
-        if (e.action == KeyEvent.ACTION_DOWN) tay.post { phimBai(e.keyCode) }
+        if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) tay.post { phimBai(e.keyCode) }
         return true
     }
 
