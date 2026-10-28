@@ -115,6 +115,7 @@ object LuatTre {
     /** Sinh bài trong mức; tránh trùng phép với bài trước nếu có. */
     fun sinh(muc: Int, seed: Long, truoc: Bai?): Bai {
         val r = Random(seed)
+        r.nextInt()
         repeat(12) {
             val b = sinhLoai(muc, if (r.nextBoolean()) "thuong" else if (muc == 100) "nho" else "qua10", seed + it)
             if (truoc == null || b.a != truoc.a || b.b != truoc.b || b.op != truoc.op) return b
@@ -162,6 +163,7 @@ object LuatTre {
     }
 
     private fun baiQua10(r: Random): Bai {
+        r.nextInt()
         if (r.nextBoolean()) {
             val a = 2 + r.nextInt(8)
             val bMin = 10 - a
@@ -169,9 +171,9 @@ object LuatTre {
             val b = bMin + r.nextInt(bMax - bMin + 1)
             return Bai(a, '+', b, a + b, emptyList())
         }
-        val a = 11 + r.nextInt(10)
+        val a = 11 + r.nextInt(8)
         val bMin = a % 10 + 1
-        val b = bMin + r.nextInt(a - bMin + 1)
+        val b = bMin + r.nextInt(9 - bMin + 1)
         return Bai(a, '-', b, a - b, emptyList())
     }
 

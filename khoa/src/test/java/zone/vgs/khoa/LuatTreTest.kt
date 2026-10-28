@@ -2,7 +2,6 @@ package zone.vgs.khoa
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -30,9 +29,15 @@ class LuatTreTest {
     }
 
     @Test fun muc20_coBaiQua10_vaTrongPhamVi() {
-        val qua = LuatTre.sinhLoai(20, "qua10", 1L)
-        trongMuc(qua, 20)
-        assertTrue(LuatTre.qua10(qua))
+        var coTru = false
+        for (s in 0..40) {
+            val qua = LuatTre.sinhLoai(20, "qua10", s.toLong())
+            trongMuc(qua, 20)
+            assertTrue(LuatTre.qua10(qua))
+            if (qua.op == '-') coTru = true
+        }
+        assertTrue(coTru)
+        assertTrue((0..63).any { LuatTre.qua10(LuatTre.sinh(20, it.toLong(), null)) })
         repeat(20) { s -> trongMuc(LuatTre.sinh(20, s.toLong(), null), 20) }
     }
 
@@ -40,6 +45,7 @@ class LuatTreTest {
         val nho = LuatTre.sinhLoai(100, "nho", 1L)
         trongMuc(nho, 100)
         assertTrue(LuatTre.coNho(nho))
+        assertTrue((0..63).any { LuatTre.coNho(LuatTre.sinh(100, it.toLong(), null)) })
         repeat(20) { s -> trongMuc(LuatTre.sinh(100, s.toLong(), null), 100) }
     }
 
