@@ -777,39 +777,78 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
     var khoaBao by mutableStateOf("")
     /** Đúng PIN trên tivi thì mở bao lâu (anh Alex chốt 60 phút). */
     val KHOA_MO_TAM = 60
+    val youtubeTre = listOf("com.google.android.youtube.tv", "com.google.android.youtube")
+    var treBat by mutableStateOf(false)
+    var trePhut by mutableStateOf(30)
+    var treMuc by mutableStateOf(10)
+    val treApp = mutableStateListOf<String>()
+    var treMode by mutableStateOf("tre")
+    /** App có biểu tượng đang cài — cùng nguồn màn chọn gói (`coBieuTuong` ∩ `caiDat`). */
+    val appIconTrenTv: List<String> get() = trangThai?.let { tt ->
+        tt.coBieuTuong.filter { it in tt.caiDat }.sortedBy { zone.vgs.tvsach.dulieu.tenDep(it).lowercase() }
+    } ?: emptyList()
 
     fun moKhoaTre() = chay(t("Đọc cài đặt khoá trên tivi…", "Reading the lock settings…")) {
         val j = io { tv.docKhoa() }
-        khoaTrenTv = j; khoaBao = ""; khoaPin = ""; khoaPin2 = ""
-        khoaKhung.clear()
-        if (j != null) {
-            khoaBat = j.optBoolean("bat")
-            val ks = j.optJSONArray("khung") ?: org.json.JSONArray()
-            for (i in 0 until ks.length()) {
-                val k = ks.getJSONObject(i); val ng = k.optJSONArray("ngay") ?: org.json.JSONArray()
-                khoaKhung += KhungKhoa(k.optString("tu"), k.optString("den"), (0 until ng.length()).map { ng.getInt(it) }.toSet())
-            }
-        }
-        if (khoaKhung.isEmpty()) { khoaBat = true; khoaKhung += KhungKhoa("21:00", "06:00", (1..7).toSet()) }
+        khoaBao = ""; khoaPin = ""; khoaPin2 = ""
+        ganFormKhoa(j)
         man = Man.KHOA_TRE
     }
 
-    fun luuKhoaTre() = chay(t("Đang cài khoá lên tivi…", "Setting up the lock on the TV…")) {
-        val coPin = khoaTrenTv?.optBoolean("coPin") == true
-        if (!coPin || khoaPin.isNotEmpty()) {
-            if (!Regex("^[0-9]{4}$").matches(khoaPin)) error(t("Mã PIN phải đúng 4 chữ số.", "The PIN must be exactly 4 digits."))
-            if (khoaPin != khoaPin2) error(t("Hai lần nhập PIN không giống nhau.", "The two PINs don't match."))
+    private fun ganFormKhoa(j: JSONObject?) {
+        khoaTrenTv = j
+        khoaKhung.clear()
+        treApp.clear()
+        if (j != null) {
+            khoaBat = j.optBoolean("bat")
+            val ks = j.optJSONArray("khung") ?: JSONArray()
+            for (i in 0 until ks.length()) {
+                val k = ks.getJSONObject(i); val ng = k.optJSONArray("ngay") ?: JSONArray()
+                khoaKhung += KhungKhoa(k.optString("tu"), k.optString("den"), (0 until ng.length()).map { ng.getInt(it) }.toSet())
+            }
+            treBat = j.optBoolean("treBat")
+            trePhut = j.optInt("phutToan", 30)
+            val muc = j.optInt("mucToan", 10)
+            treMuc = if (muc == 20 || muc == 100) muc else 10
+            treMode = if (j.optString("treMode") == "phuHuynh") "phuHuynh" else "tre"
+            val apps = j.optJSONArray("appChoPhep")
+            if (apps != null) for (i in 0 until apps.length()) {
+                val p = apps.optString(i)
+                if (p.isNotBlank()) treApp += p
+            }
+        } else {
+            treBat = false; trePhut = 30; treMuc = 10; treMode = "tre"
         }
-        if (khoaKhung.isEmpty()) error(t("Thêm ít nhất một khung giờ khoá.", "Add at least one lock period."))
-        val gio = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
-        khoaKhung.forEach { if (!gio.matches(it.tu) || !gio.matches(it.den) || it.ngay.isEmpty()) error(t("Khung giờ ${it.tu}–${it.den} chưa đúng (giờ dạng 21:00, chọn ít nhất một ngày).", "Period ${it.tu}–${it.den} is not valid.")) }
-        val j = org.json.JSONObject().put("bat", khoaBat).put("moTamPhut", KHOA_MO_TAM)
-            .put("khung", org.json.JSONArray(khoaKhung.map { org.json.JSONObject().put("tu", it.tu).put("den", it.den).put("ngay", org.json.JSONArray(it.ngay.sorted())) }))
+        if (khoaKhung.isEmpty()) { khoaBat = true; khoaKhung += KhungKhoa("21:00", "06:00", (1..7).toSet()) }
+        val coIcon = trangThai?.let { tt -> tt.coBieuTuong.intersect(tt.caiDat) } ?: emptySet()
+        for (p in youtubeTre) if (p in coIcon && p !in treApp) treApp += p
+    }
+
+    private fun jsonDatKhoa(): JSONObject {
+        val j = JSONObject().put("bat", khoaBat).put("moTamPhut", KHOA_MO_TAM)
+            .put("khung", JSONArray(khoaKhung.map { JSONObject().put("tu", it.tu).put("den", it.den).put("ngay", JSONArray(it.ngay.sorted())) }))
         if (khoaPin.isNotEmpty()) {
             val muoi = java.util.UUID.randomUUID().toString().replace("-", "").take(16)
             val bam = java.security.MessageDigest.getInstance("SHA-256").digest((muoi + khoaPin).toByteArray()).joinToString("") { "%02x".format(it) }
             j.put("muoi", muoi).put("pinBam", bam)
         }
+        return j
+    }
+
+    private fun kiemPinKhoa() {
+        val coPin = khoaTrenTv?.optBoolean("coPin") == true
+        if (!coPin || khoaPin.isNotEmpty()) {
+            if (!Regex("^[0-9]{4}$").matches(khoaPin)) error(t("Mã PIN phải đúng 4 chữ số.", "The PIN must be exactly 4 digits."))
+            if (khoaPin != khoaPin2) error(t("Hai lần nhập PIN không giống nhau.", "The two PINs don't match."))
+        }
+    }
+
+    fun luuKhoaTre() = chay(t("Đang cài khoá lên tivi…", "Setting up the lock on the TV…")) {
+        kiemPinKhoa()
+        if (khoaKhung.isEmpty()) error(t("Thêm ít nhất một khung giờ khoá.", "Add at least one lock period."))
+        val gio = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
+        khoaKhung.forEach { if (!gio.matches(it.tu) || !gio.matches(it.den) || it.ngay.isEmpty()) error(t("Khung giờ ${it.tu}–${it.den} chưa đúng (giờ dạng 21:00, chọn ít nhất một ngày).", "Period ${it.tu}–${it.den} is not valid.")) }
+        val j = jsonDatKhoa()
         val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
         io { tv.caiKhoa(apk, j.toString()) { thongBao = it } }
         kotlinx.coroutines.delay(2500)
@@ -820,6 +859,53 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
             else if (chay) t("Đã bật khoá. Trong khung giờ, tivi hiện màn khoá; nhập đúng PIN thì mở $KHOA_MO_TAM phút.", "The lock is on. During the periods the TV shows the lock screen; the PIN unlocks it for $KHOA_MO_TAM minutes.")
             else t("Đã lưu nhưng dịch vụ khoá chưa chạy. Tắt tivi bật lại rồi mở lại màn này kiểm tra.", "Saved, but the lock service isn't running yet. Restart the TV and check again.")
         zone.vgs.tvsach.Dem.gui(ctx, "khoa", tenTiviDem(), khoaKhung.size, if (khoaBat) "bat" else "tat")
+    }
+
+    fun luuTre() = chay(t("Đang lưu mode trẻ em…", "Saving kids mode…")) {
+        kiemPinKhoa()
+        val coPin = khoaTrenTv?.optBoolean("coPin") == true
+        if (!coPin || khoaPin.isNotEmpty()) {
+            val gio = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
+            khoaKhung.forEach { if (!gio.matches(it.tu) || !gio.matches(it.den) || it.ngay.isEmpty()) error(t("Khung giờ ${it.tu}–${it.den} chưa đúng (giờ dạng 21:00, chọn ít nhất một ngày).", "Period ${it.tu}–${it.den} is not valid.")) }
+            val j = jsonDatKhoa()
+            val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
+            io { tv.caiKhoa(apk, j.toString()) { thongBao = it } }
+        }
+        val app = treApp.toMutableList()
+        val coIcon = trangThai?.let { tt -> tt.coBieuTuong.intersect(tt.caiDat) } ?: emptySet()
+        for (p in youtubeTre) if (p in coIcon && p !in app) app += p
+        val tre = JSONObject()
+            .put("lenh", if (treBat) "bat" else "tat")
+            .put("phutToan", trePhut)
+            .put("mucToan", treMuc)
+            .put("appChoPhep", JSONArray(app))
+        io { tv.datTre(tre.toString()) }
+        kotlinx.coroutines.delay(2500)
+        val doc = io { tv.docKhoa() }
+        if (doc != null) ganFormKhoa(doc) else khoaTrenTv = null
+        khoaPin = ""; khoaPin2 = ""
+        val chayDv = doc?.optBoolean("dichVuChay") == true
+        khoaBao = if (treBat && !chayDv)
+            t("Đã lưu nhưng dịch vụ chưa chạy, nên chưa hiện bài toán. Tắt tivi bật lại.", "Saved, but the service is not running, so the quiz will not show. Restart the TV.")
+        else if (treBat) t("Đã bật mode trẻ em.", "Kids mode is on.")
+        else t("Đã tắt mode trẻ em. Giờ và danh sách vẫn giữ.", "Kids mode is off. The minutes and list are kept.")
+    }
+
+    /** Đổi mode phụ huynh / trẻ em. Không hỏi PIN trên điện thoại. */
+    fun chuyenModeTre(lenh: String) = chay(t("Đang gửi lệnh…", "Sending…")) {
+        io { tv.datTre(JSONObject().put("lenh", lenh).toString()) }
+        kotlinx.coroutines.delay(800)
+        val j = io { tv.docKhoa() }
+        if (j != null) {
+            khoaTrenTv = j
+            treBat = j.optBoolean("treBat")
+            treMode = if (j.optString("treMode") == "phuHuynh") "phuHuynh" else "tre"
+        }
+        khoaBao = when {
+            !treBat -> t("Mode trẻ em đang tắt, nên chưa đổi mode.", "Kids mode is off, so the mode did not change.")
+            treMode == "phuHuynh" -> t("Đã chuyển sang mode phụ huynh.", "Switched to parent mode.")
+            else -> t("Đã về mode trẻ em.", "Back to kids mode.")
+        }
     }
 
     fun moTamKhoaTre(phut: Int) = chay(t("Đang gửi lệnh…", "Sending…")) {

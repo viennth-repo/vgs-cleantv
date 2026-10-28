@@ -2,6 +2,7 @@ package zone.vgs.tvsach.adb
 
 import zone.vgs.tvsach.t
 import zone.vgs.tvsach.dulieu.BanSaoLuu
+import zone.vgs.tvsach.dulieu.catJsonKhoa
 import zone.vgs.tvsach.dulieu.KeHoach
 import zone.vgs.tvsach.dulieu.KhoSaoLuu
 import zone.vgs.tvsach.dulieu.ThongTinTv
@@ -1174,12 +1175,19 @@ class ThaoTacTv(private val adb: KetNoiAdb, private val kho: KhoSaoLuu) {
 
     fun khoaDaCai(): Boolean = sh("pm path $PKG_KHOA 2>/dev/null").contains("package:")
 
-    /** Trạng thái trên tivi (không có PIN): {bat, khung, moTamPhut, coPin, moTamDen, dangKhoa, dichVuChay}; null nếu chưa cài. */
+    /** Trạng thái trên tivi (không có PIN): {bat, khung, moTamPhut, coPin, moTamDen, dangKhoa, dichVuChay, treBat, treMode, phutToan, mucToan, appChoPhep}; null nếu chưa cài. */
     fun docKhoa(): org.json.JSONObject? {
         if (!khoaDaCai()) return null
         val out = sh("content call --uri $khoaUri --method doc 2>/dev/null")
-        val a = out.indexOf("json="); val b = out.lastIndexOf("}]")
-        return if (a < 0 || b <= a) null else runCatching { org.json.JSONObject(out.substring(a + 5, b)) }.getOrNull()
+        val json = catJsonKhoa(out) ?: return null
+        return runCatching { org.json.JSONObject(json) }.getOrNull()
+    }
+
+    /** Ghi mode trẻ em lên tivi (`dat-tre`). [json] là một object, không chứa dấu nháy đơn. */
+    fun datTre(json: String) {
+        require(!json.contains('\'')) { "json" }
+        val kq = sh("content call --uri $khoaUri --method dat-tre --arg '$json'")
+        if (!kq.contains("ok=1")) error(t("Tivi không nhận mode trẻ em: ${kq.trim()}", "The TV rejected kids mode: ${kq.trim()}"))
     }
 
     /** Cài (nếu cần), cấp quyền tự canh gác, ghi cấu hình, bật dịch vụ khoá. [json] không chứa dấu nháy đơn. */
