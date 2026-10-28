@@ -1291,7 +1291,7 @@ index 17961443..1e2cd5de 100644
      private boolean shamsi;
      /** greeting_name: said after the greeting, which is shown in capitals. */
      private String greetingName = "";
-@@ -369,6 +380,33 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -369,6 +380,34 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              updateClockVisibility();
          }
      };
@@ -1303,6 +1303,7 @@ index 17961443..1e2cd5de 100644
 +            if (intent == null || !"zone.vgs.cleantv.TRE_DOI".equals(intent.getAction())) return;
 +            nhoTre();
 +            reloadApps(false, true, false);
++            if (appLibrary != null) appLibrary.refresh();
 +        }
 +    };
 +    /** Đã đọc mode một lần. Null nghĩa là không lọc. */
@@ -1325,7 +1326,7 @@ index 17961443..1e2cd5de 100644
      private final Runnable minuteTick = new Runnable() {
          @Override
          public void run() {
-@@ -377,6 +415,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -377,6 +416,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              // The pill follows the network callbacks and each return to Home; only the diya's flame follows the
              // signal level, so only it needs this minute's binder calls (about 7 ms on the UI thread).
              if (festive) updateWifiLabel();
@@ -1333,7 +1334,7 @@ index 17961443..1e2cd5de 100644
              sky.update();
              wallpaperPlayer.update();
              handler.postDelayed(this, MINUTE_MS);
-@@ -392,6 +431,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -392,6 +432,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          density = getResources().getDisplayMetrics().density;
          // config.xml, overlaid by config.json from a pushed theme (see Config and tools/theme.sh).
          Config cfg = Config.load(this);
@@ -1343,7 +1344,7 @@ index 17961443..1e2cd5de 100644
          homeAppKeys = RemoteKeys.parseAppKeys(cfg.appKeys);
          appLibrarySelection = cfg.appLibrarySelection;
          libraryOkOpens = cfg.libraryOkOpens;
-@@ -472,6 +514,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -472,6 +515,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              ((TextView) findViewById(R.id.date)).setTextColor(Color.WHITE);
              findViewById(R.id.clockDivider).setBackgroundColor(Color.WHITE);
          }
@@ -1361,7 +1362,7 @@ index 17961443..1e2cd5de 100644
          if (getResources().getBoolean(R.bool.rtl_menu_bar)) {
              // Center Hebrew greetings over the numeric time, independent of a visible AM/PM label. The clock's row
              // is watched too: date_below_clock can move the whole row right under a wider date.
-@@ -504,6 +557,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -504,6 +558,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          lunarOffset = Lunar.offsetFor(cfg.lunarUtcOffset, Locale.getDefault());
          if (lunar) lunarDate.setVisibility(View.VISIBLE);
          greetingName = cfg.greetingName;
@@ -1377,7 +1378,7 @@ index 17961443..1e2cd5de 100644
          if (cfg.dateBelowClock) moveDateBelowClock();
          if (shamsi) {
              shamsiDate.setVisibility(View.VISIBLE);
-@@ -512,6 +574,45 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -512,6 +575,45 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              lunarDate.setTextSize(11f);
              date.setPadding(0, (int) (4 * density), 0, 0);
          }
@@ -1423,7 +1424,7 @@ index 17961443..1e2cd5de 100644
          vpnApp = cfg.vpnApp;
          vpnPill = cfg.vpnPill && !cfg.topMenu;
          btnVpn = findViewById(R.id.btnVpn);
-@@ -593,6 +694,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -593,6 +695,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          });
          if (dockRow) grid.addItemDecoration(new DockDecoration(COLUMNS, density, cinematic, cfg.alwaysShowNames, cfg.dockOpacity, cfg.dockGlass, cfg.dockEvenPadding, cfg.dockBand,
                  singleRow, cfg.dockBandAll));
@@ -1442,7 +1443,7 @@ index 17961443..1e2cd5de 100644
          if (cfg.fadeRows) TopFade.attach(grid, 48 * density);
          // Reduced motion: the tiles are simply there, with no entrance (reloadApps skips it there too).
          if (animations && !reducedMotion) {
-@@ -609,6 +722,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -609,6 +723,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          // tvOS layout: push the dock row towards the bottom of the screen, leaving room for
          // rows_below_dock grid rows under it; the rest of the grid stays below until you press Down.
          int rowsBelowDock = cfg.rowsBelowDock;
@@ -1454,7 +1455,7 @@ index 17961443..1e2cd5de 100644
          grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
              int h = b - t;
              // Item height follows the tile size, which follows the columns and the rows that must fit (AppAdapter.tileWidthPx).
-@@ -629,6 +747,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -629,6 +748,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              // A single row never shows the names under its tiles (the title above the row names the app), so the
              // 7dp gap and 22dp label item_app.xml keeps for them would only lift the row: sit it that much lower.
              if (singleRow && !cfg.alwaysShowNames) want += (int) (29 * density);
@@ -1466,7 +1467,7 @@ index 17961443..1e2cd5de 100644
              if (grid.getPaddingTop() != want) {
                  grid.setPadding(grid.getPaddingLeft(), want, grid.getPaddingRight(), grid.getPaddingBottom());
                  // A vertical grid parks the dock on the new padding line by scrolling (onTileFocused); a sideways
-@@ -766,6 +889,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -766,6 +890,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              tlp.bottomMargin = 0;
              topButtons.setLayoutParams(tlp);
              topButtons.setGravity(Gravity.CENTER_VERTICAL);
@@ -1482,7 +1483,7 @@ index 17961443..1e2cd5de 100644
          }
          if (iconOnlyButtons) {
              if (cfg.wifiLabelWidth > 0) btnWifi.setMaxWidth(Math.round(cfg.wifiLabelWidth * density));
-@@ -773,6 +905,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -773,6 +906,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              makeIconOnly((TextView) btnSettings);
          }
          if (cfg.iconOnlyInputs) makeIconOnly((TextView) btnInputs);
@@ -1507,7 +1508,7 @@ index 17961443..1e2cd5de 100644
          btnSettings.setOnLongClickListener(v -> {
              showSettingsMenu();
              return true;
-@@ -796,8 +946,42 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -796,8 +947,42 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              return keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.getId() == rightButton;
          };
          btnInputs.setOnKeyListener(pillKeys);
@@ -1550,7 +1551,7 @@ index 17961443..1e2cd5de 100644
          btnSettings.setOnKeyListener(pillKeys);
          btnReorder.setOnKeyListener(pillKeys);
          btnLibraryTop.setOnKeyListener(pillKeys);
-@@ -933,16 +1117,49 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -933,16 +1118,49 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          started = true;
          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
              registerReceiver(timeReceiver, timeFilter, Context.RECEIVER_NOT_EXPORTED);
@@ -1600,15 +1601,18 @@ index 17961443..1e2cd5de 100644
          // A festival that started or ended while Home was in the background: rebuild with or without it.
          if (festive != festival.active(LocalDate.now())) {
              recreate();
-@@ -958,6 +1175,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -958,6 +1176,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          restartIdleClock();
          promptsPaused = false;
          if (grid.getAdapter() == null) grid.setAdapter(adapter);   // dropped by onTrimMemory
-+        if (treThayDoi()) tileRefresh.invalidate();
++        if (treThayDoi()) {
++            tileRefresh.invalidate();
++            if (appLibrary != null) appLibrary.refresh();
++        }
          switch (tileRefresh.onResume(packagesChangedSinceRebuild())) {
              case REBUILD:
                  tilesReady = false;
-@@ -974,6 +1192,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -974,6 +1196,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          if (openLiveTvAfterBoot()) return;
          updateGreeting();
          updateRace();
@@ -1618,7 +1622,7 @@ index 17961443..1e2cd5de 100644
          // The network and Inputs pills keep their state while Home is in the background, and callbacks update them
          // when the network or the inputs change, so this refresh only catches anything missed. Its binder calls
          // (about 7 ms on a TCL C755, most of it WifiManager.getConnectionInfo) would hold up the first frame back
-@@ -986,6 +1207,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -986,6 +1211,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              pillsShown = true;
          }
          if (showStats) startStats();
@@ -1626,7 +1630,7 @@ index 17961443..1e2cd5de 100644
          sky.update();
          wallpaperPlayer.start();
          handler.postDelayed(minuteTick, MINUTE_MS);
-@@ -1154,6 +1376,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1154,6 +1380,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      @Override
      protected void onPause() {
          super.onPause();
@@ -1634,7 +1638,7 @@ index 17961443..1e2cd5de 100644
          root.removeCallbacks(showIdleClock);
          endReorder();   // Home or another app while reordering keeps the order so far
          wallpaperPlayer.stop();
-@@ -1176,6 +1399,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -1176,6 +1403,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          super.onStop();
          started = false;
          unregisterReceiver(timeReceiver);
@@ -1642,7 +1646,7 @@ index 17961443..1e2cd5de 100644
          handler.removeCallbacks(clockCheck);
          stopped = true;
          tileRefresh.onStop();
-@@ -2053,6 +2277,30 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2053,6 +2281,30 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          else glass.setAlpha(0f);
      }
  
@@ -1673,7 +1677,7 @@ index 17961443..1e2cd5de 100644
      // ---- optional system stats (config.xml show_stats) --------------------------------------------
  
      /** Background reader. Started only while Home is resumed and show_stats is on. */
-@@ -2117,13 +2365,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2117,13 +2369,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
          // showing a dash that never fills in.
          StringBuilder line = new StringBuilder();
          if (cpu >= 0) line.append(getString(R.string.stats_cpu, cpu));
@@ -1701,7 +1705,7 @@ index 17961443..1e2cd5de 100644
      // -1: need another sample. -2: this source cannot be read (Android 9 hides /proc/stat from apps).
      private static final int CPU_UNREADABLE = -2;
      private long cpuTotalPrev = -1, cpuIdlePrev = -1;
-@@ -2318,6 +2577,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2318,6 +2581,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              ((LinearLayout.LayoutParams) clockRow.getLayoutParams()).gravity = Gravity.RIGHT;
          }
          clockColumn.addView(column, clockColumn.indexOfChild(clockRow) + 1, lp);
@@ -1712,7 +1716,7 @@ index 17961443..1e2cd5de 100644
      }
  
      /** The first top-bar button after Inputs that is shown, in bar order (top_bar_apps, the network pill, ...); Settings is always there. */
-@@ -2679,7 +2942,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2679,7 +2946,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
              text = stub || icon == R.drawable.ic_ethernet ? "" : name;
              SpannableString label = new SpannableString(text + " " + badge);
              label.setSpan(span, text.length() + 1, label.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -1725,7 +1729,7 @@ index 17961443..1e2cd5de 100644
          } else if (!TextUtils.equals(btnWifi.getText(), text)) {
              btnWifi.setText(text);
          }
-@@ -2934,7 +3201,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
+@@ -2934,7 +3205,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
       *  source number; "HW8=-" leaves that input out of the Inputs menu (a port the board reports but the set
       *  does not have). Returns the number, -1 for a left-out input, or null when the input is not listed. */
      private Integer mappedSource(String inputId) {
