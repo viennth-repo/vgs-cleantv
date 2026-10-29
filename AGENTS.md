@@ -11,16 +11,16 @@ Project: **CleanTV** (`vgs-cleantv`, Gradle root `tv-sach`) — app Android (Kot
 Chuẩn đầy đủ cho mọi AI agent: **[`.cursor/templates/ai-agent-generic-rule.md`](.cursor/templates/ai-agent-generic-rule.md)**. Tóm tắt bắt buộc:
 
 **Session-start (đúng thứ tự, dừng sớm nhất có thể):**
-1. `Read` **`.contexts/INDEX.md`**. `.contexts` gitignored → `Glob`/`Grep` không thấy; **cấm** dùng chúng để tìm context.
-2. Khớp keyword task với cột Keywords §2 → `Read` đúng 1 path. Đủ để làm → **dừng**.
-3. Miss §2 → §1 chọn **một** bucket → `ls` đúng folder đó. Vẫn miss → `README.md` / source; khám phá rộng → **Task tool (subagent)**.
-4. **Stale** → sửa file cache + cột `Verified` trên INDEX.
+1. `Read` **`.contexts/INDEX.md`** (gitignore — `Glob`/`Grep` không thấy). Khớp Keywords §2 → `Read` đúng 1 file. Đủ → **dừng**. Không mở `docs/`.
+2. Miss → `Read` **`docs/INDEX.md`** thôi. Cấm `ls` / `Grep` cả `docs/`. Khớp §2 → `Read` đúng 1 file. Đủ → **dừng**.
+3. Miss cả hai → §1 của index vừa đọc, `ls` **một** folder. Vẫn miss → `README.md` / source. Khám phá rộng → **Task tool (subagent)**.
+4. **Stale** → sửa file cache + cột `Verified` trên đúng INDEX.
 
-**Session-end:** distill vào `.contexts/contexts/<domain>/<topic>.md` (cross-cutting → `_shared/`; format: `.cursor/templates/context-file-template.md` + frontmatter) + **1 hàng** INDEX §2. Spec/plan/issue/audit không vào §2 trừ khi đã distill thành cache bền.
+**Session-end:** fact dùng chung repo → `docs/contexts/<domain>/<topic>.md` + **1 hàng** `docs/INDEX.md` §2. Fact chỉ máy này → `.contexts/contexts/<domain>/<topic>.md` (cross-cutting → `_shared/`) + **1 hàng** `.contexts/INDEX.md` §2. Cùng template `.cursor/templates/context-file-template.md`. Spec/plan dài không nhét vào §2; INDEX chỉ ghi khi nào được mở.
 
 **Prompt-cache hygiene:** không re-read file đã có trong context; kết quả trung gian ghi ra file thay vì lặp trong hội thoại. Chi tiết cơ chế prefix-cache: generic rule §6.
 
-Router: `.contexts/INDEX.md`. Mô tả sản phẩm và cách dựng: `README.md`.
+Router: `.contexts/INDEX.md` rồi `docs/INDEX.md`. Mô tả sản phẩm và cách dựng: `README.md`.
 
 ---
 
@@ -98,7 +98,7 @@ Thiếu SDK: tạo `local.properties` với `sdk.dir`. Bản release công khai 
 
 Hai application module Gradle, không phụ thuộc nguồn lẫn nhau. `:app` chạy trên điện thoại (hoặc trên tivi); `:khoa` là APK riêng cài lên tivi khi bật khoá trẻ em. Launcher Home sạch không nằm trong source: upstream CleanYourTV + `patches/launcher-vgs.patch`, script `scripts/dung-launcher.sh` nhét APK vào `app/src/main/assets/`.
 
-Luồng một phiên dọn: `MainActivity` → Compose `ui/UngDung` / `ManHinh` → `ui/PhienLamViec` → `adb/KetNoiAdb` (libadb-android, Wi-Fi) → `adb/ThaoTacTv` (sao lưu, tắt gói, cài Home, thử nút Home, khôi phục). Kế hoạch gói: `dulieu/KeHoach` đọc danh sách mẫu `dulieu/DuLieu` (`assets/du-lieu.json`, ~341 mẫu). Map chi tiết khi đã distill: `.contexts/INDEX.md`.
+Luồng một phiên dọn: `MainActivity` → Compose `ui/UngDung` / `ManHinh` → `ui/PhienLamViec` → `adb/KetNoiAdb` (libadb-android, Wi-Fi) → `adb/ThaoTacTv` (sao lưu, tắt gói, cài Home, thử nút Home, khôi phục). Kế hoạch gói: `dulieu/KeHoach` đọc danh sách mẫu `dulieu/DuLieu` (`assets/du-lieu.json`, ~341 mẫu). Map chi tiết khi đã distill: `.contexts/INDEX.md` hoặc `docs/INDEX.md`.
 
 | Kênh | Khi dùng |
 |---|---|
