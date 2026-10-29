@@ -39,7 +39,7 @@ import java.net.Inet4Address
 import java.net.InetSocketAddress
 import java.net.Socket
 
-enum class Man { CHINH, KET_NOI, THONG_TIN, CHON_GOI, DANG_TAT, HOME_SACH, XONG, KHOI_PHUC, HUONG_DAN, GIAY_PHEP, KHOA_TRE, REMOTE }
+enum class Man { CHINH, KET_NOI, THONG_TIN, CHON_GOI, DANG_TAT, HOME_SACH, XONG, KHOI_PHUC, HUONG_DAN, GIAY_PHEP, KHOA_TRE, MODE_TRE, REMOTE }
 
 /** Số app tối đa trong dock: bằng số cột lớn nhất của Home sạch (columns 1–8); dock dài hơn số cột thì tràn xuống hàng sau (22/10/2026, góp ý muốn hàng đầu nhiều app hơn). */
 const val DOCK_TOI_DA = 8
@@ -795,6 +795,14 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
         man = Man.KHOA_TRE
     }
 
+    /** Màn riêng: lọc app trên Home và bài toán khi xem YouTube. Không đụng khung giờ khoá. */
+    fun moModeTre() = chay(t("Đọc mode trẻ em trên tivi…", "Reading kids mode on the TV…")) {
+        val j = io { tv.docKhoa() }
+        khoaBao = ""; khoaPin = ""; khoaPin2 = ""
+        ganFormKhoa(j)
+        man = Man.MODE_TRE
+    }
+
     private fun ganFormKhoa(j: JSONObject?) {
         khoaTrenTv = j
         khoaKhung.clear()
@@ -879,32 +887,17 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
         if (khoaBat && khoaKhung.isEmpty()) error(t("Thêm ít nhất một khung giờ khoá, hoặc tắt khoá theo giờ.", "Add at least one lock period, or turn the schedule off."))
         val gio = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
         khoaKhung.forEach { if (!gio.matches(it.tu) || !gio.matches(it.den) || it.ngay.isEmpty()) error(t("Khung giờ ${it.tu}–${it.den} chưa đúng (giờ dạng 21:00, chọn ít nhất một ngày).", "Period ${it.tu}–${it.den} is not valid.")) }
-        val daBat = khoaTrenTv?.optBoolean("treBat") == true
         val j = jsonDatKhoa()
         val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
         io { tv.caiKhoa(ctx, apk, j.toString()) { thongBao = it } }
-        io { tv.damBaoBanKhoa(ctx, apk) { thongBao = it } }
-        val tre = jsonTre(daBat)
-        io { tv.datTre(tre.toString()) }
-        capNhatHomeLoc()
-        ghiDanhSachLenHome(treBat)
-        tre.remove("lenh")
-        io { tv.datTre(tre.toString()) }
         kotlinx.coroutines.delay(2500)
         val doc = io { tv.docKhoa() }
         if (doc != null) ganFormKhoa(doc) else khoaTrenTv = null
         khoaPin = ""; khoaPin2 = ""
         val chay = doc?.optBoolean("dichVuChay") == true
-        val khoaMsg = if (!khoaBat) t("Đã lưu. Khoá đang tắt.", "Saved. The lock is off.")
+        khoaBao = if (!khoaBat) t("Đã lưu. Khoá đang tắt.", "Saved. The lock is off.")
             else if (chay) t("Đã bật khoá. Trong khung giờ, tivi hiện màn khoá; nhập đúng PIN thì mở $KHOA_MO_TAM phút.", "The lock is on. During the periods the TV shows the lock screen; the PIN unlocks it for $KHOA_MO_TAM minutes.")
             else t("Đã lưu nhưng dịch vụ khoá chưa chạy. Tắt tivi bật lại rồi mở lại màn này kiểm tra.", "Saved, but the lock service isn't running yet. Restart the TV and check again.")
-        val treMsg = when {
-            treBat && !chay -> t(" Mode trẻ em đã lưu nhưng dịch vụ chưa chạy, nên chưa hiện bài toán. Tắt tivi bật lại.", " Kids mode is saved, but the service is not running, so the quiz will not show. Restart the TV.")
-            treBat && treMode == "phuHuynh" -> t(" Đang mode phụ huynh nên Home vẫn hiện đủ app. Bấm Về mode trẻ em.", " Parent mode is on, so Home still shows every app. Tap Back to kids mode.")
-            treBat -> t(" Mode trẻ em đang bật. Home chỉ còn app đã chọn.", " Kids mode is on. Home shows only the chosen apps.")
-            else -> t(" Mode trẻ em đang tắt.", " Kids mode is off.")
-        }
-        khoaBao = khoaMsg + treMsg
         zone.vgs.tvsach.Dem.gui(ctx, "khoa", tenTiviDem(), khoaKhung.size, if (khoaBat) "bat" else "tat")
     }
 

@@ -130,6 +130,7 @@ fun UngDung(vm: PhienLamViec = viewModel()) {
                         Man.HUONG_DAN -> ManHuongDan(vm)
                         Man.GIAY_PHEP -> ManGiayPhep()
                         Man.KHOA_TRE -> ManKhoaTre(vm)
+                        Man.MODE_TRE -> ManModeTre(vm)
                         Man.REMOTE -> ManRemote(vm)
                     }
                 }
@@ -197,7 +198,7 @@ private fun quayLai(vm: PhienLamViec) {
         Man.HOME_SACH -> if (vm.moNangCao) { vm.moNangCao = false; Man.HOME_SACH } else vm.manTruocHome
         Man.XONG -> Man.HOME_SACH
         Man.HUONG_DAN, Man.GIAY_PHEP -> vm.manTruoc
-        Man.KHOA_TRE, Man.REMOTE -> Man.THONG_TIN
+        Man.KHOA_TRE, Man.MODE_TRE, Man.REMOTE -> Man.THONG_TIN
         Man.CHINH -> Man.CHINH
     }
 }
@@ -714,7 +715,8 @@ private fun ManThongTin(vm: PhienLamViec) = Cuon {
     NutPhu(t("Xem màn hình tivi", "View TV screen"), Icons.Rounded.Screenshot) { vm.chupManHinh() }
     NutPhu(t("Remote trên điện thoại", "Phone remote"), Icons.Rounded.SettingsRemote) { vm.moRemote() }
     if (vm.daCoHomeSach) NutPhu(t("Đổi giao diện Home sạch", "Change the clean Home theme"), Icons.Rounded.Palette) { vm.moDoiTheme() }
-    NutPhu(t("Khoá trẻ em và mode trẻ em", "Kids lock and kids mode"), Icons.Rounded.Lock) { vm.moKhoaTre() }
+    NutPhu(t("Khoá trẻ em", "Kids lock"), Icons.Rounded.Lock) { vm.moKhoaTre() }
+    NutPhu(t("Mode trẻ em", "Kids mode"), Icons.Rounded.ChildCare) { vm.moModeTre() }
     if (vm.saoLuu != null) NutPhu(t("Khôi phục tivi này", "Restore this TV"), Icons.Rounded.Restore) { vm.man = Man.KHOI_PHUC }
     else if (vm.coDauCleanTv) NutPhu(t("Khôi phục (không có sao lưu)", "Restore (no backup)"), Icons.Rounded.Restore) { vm.man = Man.KHOI_PHUC }
     else NutPhu(t("Bật lại app đã tắt", "Re-enable disabled apps"), Icons.Rounded.Restore) { vm.man = Man.KHOI_PHUC }
@@ -1945,8 +1947,18 @@ private fun ManKhoaTre(vm: PhienLamViec) = Cuon {
         }
         Phu(t("Khung qua đêm (21:00–06:00) tính theo ngày bắt đầu: chọn T2 là khoá từ tối thứ Hai tới sáng thứ Ba.", "Overnight periods count from the starting day."))
     }
+    ThePinKhoa(vm)
+    if (vm.khoaBao.isNotEmpty()) Phu(vm.khoaBao, Xanh)
+    NutChinh(t("Lưu & áp dụng lên tivi", "Save & apply to the TV"), enabled = !vm.dangBan, icon = Icons.Rounded.Lock) { vm.luuKhoaTre() }
+    if (vm.khoaTrenTv != null) NutPhu(t("Tắt và gỡ Khoá trẻ em", "Turn off and remove"), Icons.Rounded.LockOpen) { vm.tatKhoaTre() }
+    Phu(t("Lưu ý: khoá không chống được khôi phục cài đặt gốc hay đổi sang thiết bị khác cắm HDMI. Với hộp Android cắm vào tivi, trẻ vẫn đổi nguồn tivi được. Bấm Khôi phục tivi này cũng gỡ khoá.",
+        "Note: it can't stop a factory reset or another device on HDMI; with a box plugged into a TV, the TV's own input switch still works. Restore this TV also removes the lock."))
+}
+
+@Composable
+private fun ThePinKhoa(vm: PhienLamViec) {
     The(t("Mã PIN", "PIN"), Icons.Rounded.Key) {
-        if (vm.khoaTrenTv?.optBoolean("coPin") == true) Phu(t("Tivi đã có PIN. Để trống nếu không đổi.", "The TV already has a PIN. Leave empty to keep it."))
+        if (vm.khoaTrenTv?.optBoolean("coPin") == true) Phu(t("Tivi đã có PIN. Để trống nếu không đổi. Cùng một mã cho khoá theo giờ và mode trẻ em.", "The TV already has a PIN. Leave empty to keep it. One code for the schedule lock and kids mode."))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(vm.khoaPin, { vm.khoaPin = it.filter(Char::isDigit).take(4) }, label = { Text(t("PIN 4 số", "4-digit PIN")) }, singleLine = true, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
@@ -1955,9 +1967,31 @@ private fun ManKhoaTre(vm: PhienLamViec) = Cuon {
         }
         Phu(t("Sai 5 lần thì tivi bắt chờ 1 phút. Quên PIN: kết nối lại tivi ở đây và đặt PIN mới. Tivi chỉ giữ dạng mã hoá của PIN.", "5 wrong tries: wait 1 minute. Forgot it: reconnect here and set a new one. The TV only keeps a hash."))
     }
-    The(t("Mode trẻ em", "Kids mode"), Icons.Rounded.ChildCare) {
-        Phu(t("Bật thì Home chỉ còn app được chọn. Hết số phút YouTube, tivi hỏi bài toán. YouTube không bỏ được. Không cần bật khoá theo giờ: khoá đó che cả tivi và hỏi lại sau 60 phút.",
-            "When on, Home shows only the chosen apps. After the YouTube minutes, the TV asks a quiz. YouTube stays. The schedule lock is not required: that one covers the whole TV and asks again after 60 minutes."))
+}
+
+/** Lọc Home/dock và bài toán YouTube. Không có khung giờ khoá. */
+@Composable
+private fun ManModeTre(vm: PhienLamViec) = Cuon {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(t("Mode trẻ em", "Kids mode"), fontWeight = FontWeight.Black, fontSize = 22.sp)
+        Phu(t("Home và dock chỉ còn app được chọn. YouTube chạy hết số phút thì tivi hỏi một bài cộng hoặc trừ. Không khoá theo khung giờ.",
+            "Home and the dock show only the chosen apps. After the YouTube minutes, the TV asks an addition or subtraction. There is no schedule lock."))
+    }
+    vm.khoaTrenTv?.let { j ->
+        The(t("Trên tivi", "On the TV"), Icons.Rounded.ChildCare) {
+            val bat = j.optBoolean("treBat")
+            val mode = j.optString("treMode")
+            val chay = j.optBoolean("dichVuChay")
+            Phu(when {
+                !bat -> t("Mode trẻ em đang tắt.", "Kids mode is off.")
+                !chay -> t("Đã bật nhưng dịch vụ chưa chạy. Tắt tivi bật lại.", "On, but the service isn't running. Restart the TV.")
+                mode == "phuHuynh" -> t("Đang mode phụ huynh. Home hiện đủ app, không hỏi bài.", "Parent mode. Home shows every app and there is no quiz.")
+                else -> t("Đang mode trẻ em. Home chỉ còn app được chọn.", "Kids mode. Home shows only the chosen apps.")
+            }, if (bat && chay && mode != "phuHuynh") Xanh else ChuPhu)
+        }
+    }
+    ThePinKhoa(vm)
+    The(t("Lọc app và bài toán", "App filter and quiz"), Icons.Rounded.ChildCare) {
         Hang(t("Bật mode trẻ em", "Turn on kids mode"), t("Tắt thì Home hiện lại mọi app, giữ phút và danh sách", "Off: Home shows every app again; minutes and the list are kept"), vm.treBat) { vm.treBat = it }
         Text(t("Mức toán", "Quiz level"), fontSize = 14.sp)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1966,9 +2000,10 @@ private fun ManKhoaTre(vm: PhienLamViec) = Cuon {
         OutlinedTextField(vm.trePhut.toString(), { raw ->
             val d = raw.filter(Char::isDigit).take(3)
             if (d.isNotEmpty()) vm.trePhut = d.toInt()
-        }, label = { Text(t("Số phút", "Minutes")) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        }, label = { Text(t("Số phút YouTube", "YouTube minutes")) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-        Phu(t("YouTube chạy từng này phút thì hỏi bài. Tivi giữ trong khoảng 5–120.", "YouTube runs this many minutes, then a quiz. The TV keeps it between 5 and 120."))
+        Phu(t("YouTube chạy từng này phút thì hỏi bài. Tivi giữ trong khoảng 5–120. YouTube không bỏ được.",
+            "YouTube runs this many minutes, then a quiz. The TV keeps it between 5 and 120. YouTube stays."))
         Text(t("App được mở", "Apps allowed"), fontSize = 14.sp)
         val ds = vm.appIconTrenTv
         if (ds.isEmpty()) Phu(t("Chưa đọc được app có biểu tượng trên tivi.", "No apps with icons were read from the TV."))
@@ -1979,20 +2014,13 @@ private fun ManKhoaTre(vm: PhienLamViec) = Cuon {
                 if (bat) { if (pkg !in vm.treApp) vm.treApp.add(pkg) } else vm.treApp.remove(pkg)
             }
         }
-        Phu(when {
-            !vm.treBat -> t("Mode trẻ em đang tắt.", "Kids mode is off.")
-            vm.treMode == "phuHuynh" -> t("Đang ở mode phụ huynh.", "Parent mode is on.")
-            else -> t("Đang ở mode trẻ em.", "Kids mode is on.")
-        })
         NutPhu(t("Mode phụ huynh", "Parent mode"), Icons.Rounded.Person, enabled = !vm.dangBan) { vm.chuyenModeTre("phuHuynh") }
         NutPhu(t("Về mode trẻ em", "Back to kids mode"), Icons.Rounded.Face, enabled = !vm.dangBan) { vm.chuyenModeTre("tre") }
-        NutChinh(t("Lưu mode trẻ em", "Save kids mode"), enabled = !vm.dangBan, icon = Icons.Rounded.ChildCare) { vm.luuTre() }
     }
     if (vm.khoaBao.isNotEmpty()) Phu(vm.khoaBao, Xanh)
-    NutChinh(t("Lưu & áp dụng lên tivi", "Save & apply to the TV"), enabled = !vm.dangBan, icon = Icons.Rounded.Lock) { vm.luuKhoaTre() }
-    if (vm.khoaTrenTv != null) NutPhu(t("Tắt và gỡ Khoá trẻ em", "Turn off and remove"), Icons.Rounded.LockOpen) { vm.tatKhoaTre() }
-    Phu(t("Lưu ý: khoá không chống được khôi phục cài đặt gốc hay đổi sang thiết bị khác cắm HDMI. Với hộp Android cắm vào tivi, trẻ vẫn đổi nguồn tivi được. Bấm Khôi phục tivi này cũng gỡ khoá.",
-        "Note: it can't stop a factory reset or another device on HDMI; with a box plugged into a TV, the TV's own input switch still works. Restore this TV also removes the lock."))
+    NutChinh(t("Lưu mode trẻ em", "Save kids mode"), enabled = !vm.dangBan, icon = Icons.Rounded.ChildCare) { vm.luuTre() }
+    Phu(t("Muốn gỡ hẳn app trên tivi thì vào Khoá trẻ em. Gỡ ở đó cũng tắt mode trẻ em.",
+        "To remove the app from the TV, open Kids lock. Removing it there also turns kids mode off."))
 }
 
 @Composable
