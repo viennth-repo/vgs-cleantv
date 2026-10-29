@@ -636,7 +636,7 @@ new file mode 100644
 index 00000000..1c7af011
 --- /dev/null
 +++ b/launcher/app/src/main/java/com/gathin/tvhome/ChildMode.java
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,62 @@
 +package com.gathin.tvhome;
 +
 +import android.content.Context;
@@ -648,24 +648,55 @@ index 00000000..1c7af011
 +import java.util.HashSet;
 +import java.util.Set;
 +
-+/** Đọc mode trẻ em từ Khoá trẻ em. Null nghĩa là không lọc (tắt, mode phụ huynh, hoặc chưa cài). */
++/** Đọc mode trẻ em. Null nghĩa là không lọc (tắt, mode phụ huynh, hoặc chưa có danh sách). */
 +final class ChildMode {
 +    private ChildMode() {}
 +
 +    static Set<String> allow(Context ctx) {
++        Set<String> file = docFile(ctx);
++        if (file != null) return file;
++        Set<String>[] traLoi = new Set[1];
++        if (docKhoa(ctx, traLoi)) return traLoi[0];
++        return null;
++    }
++
++    /** false khi không hỏi được. true thì traLoi[0] là danh sách, hoặc null nếu không lọc. */
++    private static boolean docKhoa(Context ctx, Set<String>[] ra) {
 +        try {
 +            Bundle b = ctx.getContentResolver().call(
 +                    Uri.parse("content://zone.vgs.cleantv.khoa"), "doc-home", null, null);
-+            if (b == null) return null;
++            if (b == null || !b.containsKey("json")) return false;
 +            JSONObject o = new JSONObject(b.getString("json", "{}"));
-+            if (!o.optBoolean("treBat") || !"tre".equals(o.optString("treMode"))) return null;
-+            JSONArray a = o.optJSONArray("appChoPhep");
-+            Set<String> s = new HashSet<>();
-+            if (a != null) for (int i = 0; i < a.length(); i++) s.add(a.optString(i));
-+            return Collections.unmodifiableSet(s);
++            if (!o.has("treBat")) return false;
++            if (!o.optBoolean("treBat") || !"tre".equals(o.optString("treMode"))) {
++                ra[0] = null;
++                return true;
++            }
++            ra[0] = tap(o.optJSONArray("appChoPhep"));
++            return true;
++        } catch (Exception e) {
++            return false;
++        }
++    }
++
++    /** config.json do điện thoại ghi. Null khi chưa ghi hoặc không lọc. */
++    private static Set<String> docFile(Context ctx) {
++        try {
++            JSONObject j = Weather.cauHinh(ctx);
++            if (j == null || !j.optBoolean("tre_loc", false)) return null;
++            return tap(j.optJSONArray("tre_packages"));
 +        } catch (Exception e) {
 +            return null;
 +        }
++    }
++
++    private static Set<String> tap(JSONArray a) {
++        Set<String> s = new HashSet<>();
++        if (a != null) for (int i = 0; i < a.length(); i++) {
++            String p = a.optString(i, "");
++            if (!p.isEmpty()) s.add(p);
++        }
++        return Collections.unmodifiableSet(s);
 +    }
 +}
 diff --git a/launcher/app/src/main/java/com/gathin/tvhome/ClockScene.java b/launcher/app/src/main/java/com/gathin/tvhome/ClockScene.java

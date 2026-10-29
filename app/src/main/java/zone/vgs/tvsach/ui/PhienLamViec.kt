@@ -770,7 +770,7 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
     /** Một khung giờ khoá: "HH:MM", ngay 1 = Thứ Hai … 7 = Chủ Nhật. */
     data class KhungKhoa(val tu: String, val den: String, val ngay: Set<Int>)
     var khoaTrenTv by mutableStateOf<org.json.JSONObject?>(null)
-    var khoaBat by mutableStateOf(true)
+    var khoaBat by mutableStateOf(false)
     var khoaPin by mutableStateOf("")
     var khoaPin2 by mutableStateOf("")
     val khoaKhung = androidx.compose.runtime.mutableStateListOf<KhungKhoa>()
@@ -819,7 +819,7 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
         } else {
             treBat = false; trePhut = 30; treMuc = 10; treMode = "tre"
         }
-        if (khoaKhung.isEmpty()) { khoaBat = true; khoaKhung += KhungKhoa("21:00", "06:00", (1..7).toSet()) }
+        // Khung rỗng thì để khoá theo giờ tắt. Mode trẻ em không dùng khung này.
         val coIcon = trangThai?.let { tt -> tt.coBieuTuong.intersect(tt.caiDat) } ?: emptySet()
         for (p in youtubeTre) if (p in coIcon && p !in treApp) treApp += p
     }
@@ -851,6 +851,21 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
         return j
     }
 
+    /** JSON `dat-tre` từ form. `lenh` chỉ khi bật hoặc tắt; giữ bật thì không gửi để không kéo mode phụ huynh về trẻ em. */
+    private fun jsonTre(daBat: Boolean): JSONObject {
+        val app = treApp.toMutableList()
+        val coIcon = trangThai?.let { tt -> tt.coBieuTuong.intersect(tt.caiDat) } ?: emptySet()
+        for (p in youtubeTre) if (p in coIcon && p !in app) app += p
+        val tre = JSONObject()
+            .put("phutToan", trePhut)
+            .put("mucToan", treMuc)
+            .put("appChoPhep", JSONArray(app))
+        if (!daBat && treBat) tre.put("lenh", "bat")
+        else if (daBat && !treBat) tre.put("lenh", "tat")
+        else if (daBat && treBat) tre.put("lenh", "tre")
+        return tre
+    }
+
     private fun kiemPinKhoa() {
         val coPin = khoaTrenTv?.optBoolean("coPin") == true
         if (!coPin || khoaPin.isNotEmpty()) {
@@ -861,19 +876,35 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
 
     fun luuKhoaTre() = chay(t("Đang cài khoá lên tivi…", "Setting up the lock on the TV…")) {
         kiemPinKhoa()
-        if (khoaKhung.isEmpty()) error(t("Thêm ít nhất một khung giờ khoá.", "Add at least one lock period."))
+        if (khoaBat && khoaKhung.isEmpty()) error(t("Thêm ít nhất một khung giờ khoá, hoặc tắt khoá theo giờ.", "Add at least one lock period, or turn the schedule off."))
         val gio = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
         khoaKhung.forEach { if (!gio.matches(it.tu) || !gio.matches(it.den) || it.ngay.isEmpty()) error(t("Khung giờ ${it.tu}–${it.den} chưa đúng (giờ dạng 21:00, chọn ít nhất một ngày).", "Period ${it.tu}–${it.den} is not valid.")) }
+        val daBat = khoaTrenTv?.optBoolean("treBat") == true
         val j = jsonDatKhoa()
         val apk = io { zone.vgs.tvsach.CapNhat.moAsset(ctx, "khoa.apk").readBytes() }
         io { tv.caiKhoa(ctx, apk, j.toString()) { thongBao = it } }
+        io { tv.damBaoBanKhoa(ctx, apk) { thongBao = it } }
+        val tre = jsonTre(daBat)
+        io { tv.datTre(tre.toString()) }
+        capNhatHomeLoc()
+        ghiDanhSachLenHome(treBat)
+        tre.remove("lenh")
+        io { tv.datTre(tre.toString()) }
         kotlinx.coroutines.delay(2500)
-        khoaTrenTv = io { tv.docKhoa() }
+        val doc = io { tv.docKhoa() }
+        if (doc != null) ganFormKhoa(doc) else khoaTrenTv = null
         khoaPin = ""; khoaPin2 = ""
-        val chay = khoaTrenTv?.optBoolean("dichVuChay") == true
-        khoaBao = if (!khoaBat) t("Đã lưu. Khoá đang tắt.", "Saved. The lock is off.")
+        val chay = doc?.optBoolean("dichVuChay") == true
+        val khoaMsg = if (!khoaBat) t("Đã lưu. Khoá đang tắt.", "Saved. The lock is off.")
             else if (chay) t("Đã bật khoá. Trong khung giờ, tivi hiện màn khoá; nhập đúng PIN thì mở $KHOA_MO_TAM phút.", "The lock is on. During the periods the TV shows the lock screen; the PIN unlocks it for $KHOA_MO_TAM minutes.")
             else t("Đã lưu nhưng dịch vụ khoá chưa chạy. Tắt tivi bật lại rồi mở lại màn này kiểm tra.", "Saved, but the lock service isn't running yet. Restart the TV and check again.")
+        val treMsg = when {
+            treBat && !chay -> t(" Mode trẻ em đã lưu nhưng dịch vụ chưa chạy, nên chưa hiện bài toán. Tắt tivi bật lại.", " Kids mode is saved, but the service is not running, so the quiz will not show. Restart the TV.")
+            treBat && treMode == "phuHuynh" -> t(" Đang mode phụ huynh nên Home vẫn hiện đủ app. Bấm Về mode trẻ em.", " Parent mode is on, so Home still shows every app. Tap Back to kids mode.")
+            treBat -> t(" Mode trẻ em đang bật. Home chỉ còn app đã chọn.", " Kids mode is on. Home shows only the chosen apps.")
+            else -> t(" Mode trẻ em đang tắt.", " Kids mode is off.")
+        }
+        khoaBao = khoaMsg + treMsg
         zone.vgs.tvsach.Dem.gui(ctx, "khoa", tenTiviDem(), khoaKhung.size, if (khoaBat) "bat" else "tat")
     }
 
@@ -885,27 +916,39 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
             val j = jsonPinGiuLich()
             io { tv.caiKhoa(ctx, apk, j.toString()) { thongBao = it } }
         }
-        val app = treApp.toMutableList()
-        val coIcon = trangThai?.let { tt -> tt.coBieuTuong.intersect(tt.caiDat) } ?: emptySet()
-        for (p in youtubeTre) if (p in coIcon && p !in app) app += p
         val daBat = khoaTrenTv?.optBoolean("treBat") == true
-        val tre = JSONObject()
-            .put("phutToan", trePhut)
-            .put("mucToan", treMuc)
-            .put("appChoPhep", JSONArray(app))
-        if (!daBat && treBat) tre.put("lenh", "bat")
-        else if (daBat && !treBat) tre.put("lenh", "tat")
         io { tv.damBaoBanKhoa(ctx, apk) { thongBao = it } }
+        val tre = jsonTre(daBat)
+        io { tv.datTre(tre.toString()) }
+        capNhatHomeLoc()
+        ghiDanhSachLenHome(treBat)
+        tre.remove("lenh")
         io { tv.datTre(tre.toString()) }
         kotlinx.coroutines.delay(2500)
         val doc = io { tv.docKhoa() }
         if (doc != null) ganFormKhoa(doc) else khoaTrenTv = null
         khoaPin = ""; khoaPin2 = ""
         val chayDv = doc?.optBoolean("dichVuChay") == true
-        khoaBao = if (treBat && !chayDv)
-            t("Đã lưu nhưng dịch vụ chưa chạy, nên chưa hiện bài toán. Tắt tivi bật lại.", "Saved, but the service is not running, so the quiz will not show. Restart the TV.")
-        else if (treBat) t("Đã bật mode trẻ em.", "Kids mode is on.")
-        else t("Đã tắt mode trẻ em. Giờ và danh sách vẫn giữ.", "Kids mode is off. The minutes and list are kept.")
+        khoaBao = when {
+            treBat && !chayDv -> t("Đã lưu nhưng dịch vụ chưa chạy, nên chưa hiện bài toán. Tắt tivi bật lại.", "Saved, but the service is not running, so the quiz will not show. Restart the TV.")
+            treBat && treMode == "phuHuynh" -> t("Đang mode phụ huynh nên Home vẫn hiện đủ app. Bấm Về mode trẻ em.", "Parent mode is on, so Home still shows every app. Tap Back to kids mode.")
+            treBat -> t("Đã bật mode trẻ em. Home chỉ còn app đã chọn.", "Kids mode is on. Home shows only the chosen apps.")
+            else -> t("Đã tắt mode trẻ em. Giờ và danh sách vẫn giữ.", "Kids mode is off. The minutes and list are kept.")
+        }
+    }
+
+    /** Ghi tre_loc vào config.json của Home. Lưới và dock đọc file này. */
+    private suspend fun ghiDanhSachLenHome(loc: Boolean) {
+        thongBao = t("Đang ghi danh sách app cho Home và dock…", "Writing the app list for Home and the dock…")
+        val ok = io { tv.ghiLocHome(loc, treApp.toList()) }
+        if (!ok) error(t("Mode đã lưu nhưng Home chưa nhận danh sách app, nên lưới và dock vẫn đầy.", "Kids mode is saved, but Home did not get the app list, so the grid and dock are still full."))
+    }
+
+    /** Home trên tivi phải là bản có lọc app. Bản phát hành cũ không lọc, nên lưu mode vẫn hiện đủ app. */
+    private suspend fun capNhatHomeLoc() {
+        thongBao = t("Đang cập nhật Home sạch để chỉ hiện app được phép…", "Updating the clean Home so it shows only allowed apps…")
+        val ok = io { tv.capNhatLauncher(zone.vgs.tvsach.CapNhat.moAsset(ctx, tv.apkHome).readBytes()) }
+        if (!ok) error(t("Mode đã lưu nhưng Home sạch chưa đổi, nên danh sách app vẫn đầy. Bấm Cài Home sạch rồi lưu lại.", "Kids mode is saved, but the clean Home was not updated, so the app list is still full. Tap Install clean Home, then save again."))
     }
 
     /** Đổi mode phụ huynh / trẻ em. Không hỏi PIN trên điện thoại. */
@@ -915,6 +958,11 @@ class PhienLamViec(app: Application) : AndroidViewModel(app) {
         io { tv.datTre(JSONObject().put("lenh", lenh).toString()) }
         kotlinx.coroutines.delay(800)
         val j = io { tv.docKhoa() }
+        if (j != null) {
+            treBat = j.optBoolean("treBat")
+            treMode = if (j.optString("treMode") == "phuHuynh") "phuHuynh" else "tre"
+        }
+        ghiDanhSachLenHome(treBat && treMode != "phuHuynh")
         if (j != null) {
             khoaTrenTv = j
             treBat = j.optBoolean("treBat")

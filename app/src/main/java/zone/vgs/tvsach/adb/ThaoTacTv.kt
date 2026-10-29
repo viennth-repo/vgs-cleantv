@@ -554,6 +554,52 @@ class ThaoTacTv(private val adb: KetNoiAdb, private val kho: KhoSaoLuu) {
         return lai
     }
 
+    /**
+     * Ghi danh sách app của mode trẻ em vào config.json của Home rồi mở lại Home.
+     * `hidden_apps` là cách Home sạch vốn đã giấu ô (lưới và dock). `tre_loc` cho bản Home mới.
+     */
+    fun ghiLocHome(loc: Boolean, goi: List<String>): Boolean {
+        val cu = docCauHinhTv() ?: org.json.JSONObject()
+        val cho = goi.toMutableSet().apply {
+            add("com.google.android.youtube.tv")
+            add("com.google.android.youtube")
+        }
+        if (loc) {
+            if (!cu.optBoolean("an_tre")) {
+                if (cu.has("hidden_apps")) cu.put("hidden_apps_truoc", cu.get("hidden_apps"))
+                if (cu.has("dock_apps")) cu.put("dock_apps_truoc", cu.get("dock_apps"))
+                cu.put("an_tre", true)
+            }
+            val an = org.json.JSONArray()
+            goiDaCai().forEach { if (it !in cho && it != pkgHome) an.put(it) }
+            cu.put("hidden_apps", an)
+            val dockTruoc = cu.optJSONArray("dock_apps_truoc")
+            val dock = org.json.JSONArray()
+            val daCo = mutableSetOf<String>()
+            if (dockTruoc != null) for (i in 0 until dockTruoc.length()) {
+                val p = dockTruoc.optString(i)
+                if (p in cho && daCo.add(p)) dock.put(p)
+            }
+            if (dock.length() == 0) cho.forEach { if (daCo.add(it)) dock.put(it) }
+            cu.put("dock_apps", dock)
+        } else if (cu.optBoolean("an_tre")) {
+            if (cu.has("hidden_apps_truoc")) cu.put("hidden_apps", cu.get("hidden_apps_truoc")) else cu.remove("hidden_apps")
+            if (cu.has("dock_apps_truoc")) cu.put("dock_apps", cu.get("dock_apps_truoc")) else cu.remove("dock_apps")
+            cu.remove("hidden_apps_truoc")
+            cu.remove("dock_apps_truoc")
+            cu.put("an_tre", false)
+        }
+        cu.put("tre_loc", loc)
+        cu.put("tre_packages", org.json.JSONArray(cho.toList()))
+        sh("cmd package set-home-activity --user 0 $cmpHome 2>/dev/null; true")
+        val ok = ghiFileTheme("config.json", cu.toString().toByteArray(Charsets.UTF_8))
+        if (ok) sh(KHOI_DONG_LAI_HOME)
+        return ok
+    }
+
+    private fun goiDaCai(): List<String> =
+        sh("pm list packages").lines().map { it.trim().removePrefix("package:") }.filter { it.isNotEmpty() && ' ' !in it }
+
     /** Cài đè Home sạch bản đi kèm app; bật lại dịch vụ trợ năng mà Android tắt khi cài lại. */
     fun capNhatLauncher(apk: ByteArray): Boolean {
         // Trên tivi đã đúng bản đi kèm thì thôi (24/10/2026): cài lại Home đang chạy làm Home bật lên trước, đẩy CleanTV
@@ -670,11 +716,14 @@ class ThaoTacTv(private val adb: KetNoiAdb, private val kho: KhoSaoLuu) {
         sh("mkdir -p $dir 2>/dev/null; true")
         // restore_key_services (Nâng cao) chỉ chạy khi Home sạch có WRITE_SECURE_SETTINGS (upstream build-and-install.sh
         // RESTORE_KEY_SERVICES=1). Tắt thì thu lại quyền cho gọn.
+        val trenTv = docCauHinhTv()
         val moi = runCatching { org.json.JSONObject(json) }.getOrNull()
-        // Khoá chuyển đè Home cũ do damBaoPhimHome gắn (tivi không cho tắt Home gốc): đổi giao diện không được làm mất nó.
-        val ghi = moi?.takeIf { !it.has("stock_home_redirect") }?.let { m ->
-            docCauHinhTv()?.optString("stock_home_redirect")?.takeIf { it.isNotBlank() }?.let { m.put("stock_home_redirect", it).toString() }
-        } ?: json
+        if (moi != null && trenTv != null) {
+            if (!moi.has("stock_home_redirect")) trenTv.optString("stock_home_redirect").takeIf { it.isNotBlank() }?.let { moi.put("stock_home_redirect", it) }
+            if (!moi.has("tre_loc") && trenTv.has("tre_loc")) moi.put("tre_loc", trenTv.get("tre_loc"))
+            if (!moi.has("tre_packages") && trenTv.has("tre_packages")) moi.put("tre_packages", trenTv.get("tre_packages"))
+        }
+        val ghi = moi?.toString() ?: json
         val cuoi = runCatching { org.json.JSONObject(ghi) }.getOrNull()
         val khoiPhucPhim = cuoi?.optBoolean("restore_key_services") ?: false
         // BootHome của bản vá (3.4.2, TCL 43P618 về Home gốc sau khi rút điện): lúc khởi động, Home sạch tự bật lại dịch vụ
@@ -1238,7 +1287,12 @@ class ThaoTacTv(private val adb: KetNoiAdb, private val kho: KhoSaoLuu) {
 
     private fun caiFileKhoa(apk: ByteArray) {
         adb.ghiFile("/data/local/tmp/khoa.apk", apk)
-        val out = sh("pm install -r /data/local/tmp/khoa.apk; rm -f /data/local/tmp/khoa.apk")
+        var out = sh("pm install -r /data/local/tmp/khoa.apk; rm -f /data/local/tmp/khoa.apk")
+        if (!out.contains("Success") && out.contains("UPDATE_INCOMPATIBLE")) {
+            sh("pm uninstall $PKG_KHOA")
+            adb.ghiFile("/data/local/tmp/khoa.apk", apk)
+            out = sh("pm install -r /data/local/tmp/khoa.apk; rm -f /data/local/tmp/khoa.apk")
+        }
         if (!out.contains("Success")) error(t("Cài không được: ${out.trim().lines().lastOrNull()}", "Install failed: ${out.trim().lines().lastOrNull()}"))
     }
 

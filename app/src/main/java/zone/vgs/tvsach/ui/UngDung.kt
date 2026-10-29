@@ -1956,8 +1956,8 @@ private fun ManKhoaTre(vm: PhienLamViec) = Cuon {
         Phu(t("Sai 5 lần thì tivi bắt chờ 1 phút. Quên PIN: kết nối lại tivi ở đây và đặt PIN mới. Tivi chỉ giữ dạng mã hoá của PIN.", "5 wrong tries: wait 1 minute. Forgot it: reconnect here and set a new one. The TV only keeps a hash."))
     }
     The(t("Mode trẻ em", "Kids mode"), Icons.Rounded.ChildCare) {
-        Phu(t("Bật thì Home chỉ còn app được chọn. Hết số phút YouTube, tivi hỏi bài toán. YouTube không bỏ được.",
-            "When on, Home shows only the chosen apps. After the YouTube minutes, the TV asks a quiz. YouTube stays."))
+        Phu(t("Bật thì Home chỉ còn app được chọn. Hết số phút YouTube, tivi hỏi bài toán. YouTube không bỏ được. Không cần bật khoá theo giờ: khoá đó che cả tivi và hỏi lại sau 60 phút.",
+            "When on, Home shows only the chosen apps. After the YouTube minutes, the TV asks a quiz. YouTube stays. The schedule lock is not required: that one covers the whole TV and asks again after 60 minutes."))
         Hang(t("Bật mode trẻ em", "Turn on kids mode"), t("Tắt thì Home hiện lại mọi app, giữ phút và danh sách", "Off: Home shows every app again; minutes and the list are kept"), vm.treBat) { vm.treBat = it }
         Text(t("Mức toán", "Quiz level"), fontSize = 14.sp)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

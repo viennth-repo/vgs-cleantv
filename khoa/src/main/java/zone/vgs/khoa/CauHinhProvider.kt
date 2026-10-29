@@ -54,7 +54,8 @@ class CauHinhProvider : ContentProvider() {
                 kq.putString("json", o.toString())
             }
             "doc-home" -> {
-                if (!laHome(uid) && !laShell(uid)) throw SecurityException("chỉ Home hoặc ADB")
+                // Home sạch gọi method này. Không chặn theo tên gói: trên Android 11+ app không thấy
+                // launcher thì getPackagesForUid trả rỗng, Home bị từ chối và hiện đủ app.
                 val c = kho.cheDo()
                 val o = JSONObject().put("treBat", c.treBat).put("treMode", c.treMode).put("appChoPhep", JSONArray(c.app))
                 kq.putString("json", o.toString())
@@ -94,11 +95,6 @@ class CauHinhProvider : ContentProvider() {
     }
 
     private fun laShell(uid: Int) = uid == Process.SHELL_UID || uid == 0 || uid == Process.myUid()
-
-    private fun laHome(uid: Int): Boolean {
-        val ps = context!!.packageManager.getPackagesForUid(uid) ?: return false
-        return ps.any { it == "com.gathin.tvhome" || it == "com.ts.launcher" }
-    }
 
     override fun query(u: Uri, p: Array<out String>?, s: String?, a: Array<out String>?, o: String?) = null
     override fun getType(u: Uri): String? = null
