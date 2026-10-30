@@ -17,6 +17,12 @@ Domain: `_shared`, `adb`, `dulieu`, `launcher`, `khoa`, `web`. Domain mới ch�
 
 Quét cột Keywords. INDEX dài hơn ~1.5 trang → gộp hàng trùng, cắt hàng stale. Một task một file.
 
+### _shared
+
+| Keywords | File | Đọc khi | Verified |
+|---|---|---|---|
+| kiến trúc, architecture, HLD, sequence, sơ đồ khối, điều khiển màn hình, watchdog, Home sạch, khôi phục, ThaoTacTv | kien-truc.md | Cần kiến trúc tổng thể, luồng dọn/Home/khoá, cơ chế điều khiển hoặc thiết lập lại màn hình TV | 2026-10-30 |
+
 ### khoa
 
 | Keywords | File | Đọc khi | Verified |
